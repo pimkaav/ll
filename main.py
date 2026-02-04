@@ -11,47 +11,61 @@ class LoginWindow(QWidget):
         uic.loadUi('login.ui', self)
         self.login_button.clicked.connect(self.login)
 
+        self.user_credentials = {
+            'admin': ('admin', 'admin123'),
+            'florist': ('florist', 'florist123'),
+            'client': ('client', 'client123'),
+            'purchaser': ('purchaser', 'purchaser123')
+        }
+
     def login(self):
         username = self.username_input.text()
         password = self.password_input.text()
 
+        if username in self.user_credentials:
+            stored_username, stored_password = self.user_credentials[username]
+            if password == stored_password:
+                role = stored_username
+                self.main_window = MainWindow(role)
+                self.main_window.show()
+                self.hide()
+            else:
+                QMessageBox.warning(self, "Ошибка", "Неверный пароль")
+        else:
+            QMessageBox.warning(self, "Ошибка", "Пользователь не найден")
+
+
+class MainWindow(QMainWindow):
+    def __init__(self, role):
+        super().__init__()
+        self.role = role
+
         try:
-            conn = mysql.connector.connect(
+            self.conn = mysql.connector.connect(
                 host="localhost",
                 user="root",
                 password="root",
                 database="flower_shop"
             )
-            cursor = conn.cursor()
-            cursor.execute("SELECT role FROM users WHERE username=%s AND password=%s",
-                           (username, password))
-            result = cursor.fetchone()
-
-            if result:
-                role = result[0]
-                self.main_window = MainWindow(role, conn)
-                self.main_window.show()
-                self.hide()
-            else:
-                QMessageBox.warning(self, "Ошибка", "Неверные данные")
-
+            self.cursor = self.conn.cursor()
         except mysql.connector.Error as e:
-            QMessageBox.critical(self, "Ошибка БД", str(e))
-
-
-class MainWindow(QMainWindow):
-    def __init__(self, role, connection):
-        super().__init__()
-        self.role = role
-        self.conn = connection
-        self.cursor = self.conn.cursor()
+            QMessageBox.critical(None, "Ошибка БД", f"Не удалось подключиться к БД: {e}")
+            sys.exit(1)
 
         if role == "admin":
             uic.loadUi('admin.ui', self)
             self.setup_admin()
+        elif role == "florist":
+            uic.loadUi('florist.ui', self)
+            self.setup_florist()
+        elif role == "purchaser":
+            uic.loadUi('purchaser.ui', self)
+            self.setup_purchaser()
         else:
             uic.loadUi('user.ui', self)
             self.setup_user()
+
+        self.setWindowTitle(f"Цветочный магазин - {role}")
 
     def setup_admin(self):
         self.load_data()
@@ -61,21 +75,38 @@ class MainWindow(QMainWindow):
         self.filter_button.clicked.connect(self.filter_data)
         self.show_all_button.clicked.connect(self.load_data)
 
+    def setup_florist(self):
+        uic.loadUi('admin.ui', self)
+        self.load_data()
+        self.filter_button.clicked.connect(self.filter_data)
+        self.show_all_button.clicked.connect(self.load_data)
+        self.add_button.hide()
+        self.delete_button.hide()
+        self.update_button.hide()
+
+    def setup_purchaser(self):
+        uic.loadUi('user.ui', self)
+        self.load_data()
+        self.setWindowTitle("Менеджер по закупкам - Просмотр остатков")
+
     def setup_user(self):
         self.load_data()
 
     def load_data(self):
-        query = "SELECT id, name, color, price, type, occasion, quantity FROM flowers"
-        self.cursor.execute(query)
-        data = self.cursor.fetchall()
+        try:
+            query = "SELECT id, name, color, price, type, occasion, quantity FROM flowers"
+            self.cursor.execute(query)
+            data = self.cursor.fetchall()
 
-        self.table.setRowCount(len(data))
-        self.table.setColumnCount(7)
-        self.table.setHorizontalHeaderLabels(['ID', 'Название', 'Цвет', 'Цена', 'Тип', 'Повод', 'Кол-во'])
+            self.table.setRowCount(len(data))
+            self.table.setColumnCount(7)
+            self.table.setHorizontalHeaderLabels(['ID', 'Название', 'Цвет', 'Цена', 'Тип', 'Повод', 'Кол-во'])
 
-        for row_num, row_data in enumerate(data):
-            for col_num, col_data in enumerate(row_data):
-                self.table.setItem(row_num, col_num, QTableWidgetItem(str(col_data)))
+            for row_num, row_data in enumerate(data):
+                for col_num, col_data in enumerate(row_data):
+                    self.table.setItem(row_num, col_num, QTableWidgetItem(str(col_data)))
+        except mysql.connector.Error as e:
+            QMessageBox.critical(self, "Ошибка", f"Ошибка загрузки данных: {e}")
 
     def add_flower(self):
         dialog = QDialog(self)
@@ -117,6 +148,7 @@ class MainWindow(QMainWindow):
             self.conn.commit()
             self.load_data()
             dialog.accept()
+            QMessageBox.information(self, "Успех", "Цветок добавлен")
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
 
@@ -129,9 +161,12 @@ class MainWindow(QMainWindow):
                                          QMessageBox.StandardButton.Yes |
                                          QMessageBox.StandardButton.No)
             if reply == QMessageBox.StandardButton.Yes:
-                self.cursor.execute("DELETE FROM flowers WHERE id = %s", (id_item,))
-                self.conn.commit()
-                self.load_data()
+                try:
+                    self.cursor.execute("DELETE FROM flowers WHERE id = %s", (id_item,))
+                    self.conn.commit()
+                    self.load_data()
+                except Exception as e:
+                    QMessageBox.critical(self, "Ошибка", str(e))
 
     def update_flower(self):
         selected = self.table.currentRow()
@@ -184,25 +219,34 @@ class MainWindow(QMainWindow):
             self.conn.commit()
             self.load_data()
             dialog.accept()
+            QMessageBox.information(self, "Успех", "Данные обновлены")
         except Exception as e:
             QMessageBox.critical(self, "Ошибка", str(e))
 
     def filter_data(self):
         filter_text = self.filter_input.text()
-        if filter_text:
-            query = """SELECT * FROM flowers WHERE 
-                      name LIKE %s OR color LIKE %s OR occasion LIKE %s"""
-            search = f"%{filter_text}%"
-            self.cursor.execute(query, (search, search, search))
-        else:
-            self.cursor.execute("SELECT * FROM flowers")
+        try:
+            if filter_text:
+                query = """SELECT * FROM flowers WHERE 
+                          name LIKE %s OR color LIKE %s OR occasion LIKE %s"""
+                search = f"%{filter_text}%"
+                self.cursor.execute(query, (search, search, search))
+            else:
+                self.cursor.execute("SELECT * FROM flowers")
 
-        data = self.cursor.fetchall()
-        self.table.setRowCount(len(data))
+            data = self.cursor.fetchall()
+            self.table.setRowCount(len(data))
 
-        for row_num, row_data in enumerate(data):
-            for col_num, col_data in enumerate(row_data):
-                self.table.setItem(row_num, col_num, QTableWidgetItem(str(col_data)))
+            for row_num, row_data in enumerate(data):
+                for col_num, col_data in enumerate(row_data):
+                    self.table.setItem(row_num, col_num, QTableWidgetItem(str(col_data)))
+        except Exception as e:
+            QMessageBox.critical(self, "Ошибка", str(e))
+
+    def closeEvent(self, event):
+        if hasattr(self, 'conn'):
+            self.conn.close()
+        event.accept()
 
 
 if __name__ == "__main__":

@@ -1,37 +1,24 @@
--- Создание базы данных
-CREATE DATABASE flower_shop;
+CREATE DATABASE IF NOT EXISTS flower_shop;
 USE flower_shop;
 
--- Таблица пользователей
-CREATE TABLE users (
-    id INT PRIMARY KEY AUTO_INCREMENT,
-    username VARCHAR(50) UNIQUE NOT NULL,
-    password VARCHAR(100) NOT NULL,
-    role ENUM('admin', 'florist', 'purchaser', 'client') NOT NULL
-);
-
--- Таблица цветов
-CREATE TABLE flowers (
+CREATE TABLE IF NOT EXISTS flowers (
     id INT PRIMARY KEY AUTO_INCREMENT,
     name VARCHAR(100) NOT NULL,
     color VARCHAR(50),
     price DECIMAL(10,2) NOT NULL,
     type VARCHAR(50),
     occasion VARCHAR(100),
-    quantity INT DEFAULT 0,
-    supplier_id INT
+    quantity INT DEFAULT 0
 );
 
--- Таблица клиентов
-CREATE TABLE clients (
+CREATE TABLE IF NOT EXISTS clients (
     id INT PRIMARY KEY AUTO_INCREMENT,
     full_name VARCHAR(150) NOT NULL,
     phone VARCHAR(20),
     email VARCHAR(100)
 );
 
--- Таблица заказов
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
     id INT PRIMARY KEY AUTO_INCREMENT,
     client_id INT,
     order_date DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -40,18 +27,18 @@ CREATE TABLE orders (
     payment_method ENUM('наличные', 'карта')
 );
 
--- Начальные данные
-INSERT INTO users (username, password, role) VALUES
-('admin', 'admin123', 'admin'),
-('florist1', 'florist123', 'florist'),
-('client1', 'client123', 'client');
-
 INSERT INTO flowers (name, color, price, type, occasion, quantity) VALUES
 ('Роза', 'Красный', 150.00, 'Цветок', 'Любовь', 100),
 ('Тюльпан', 'Желтый', 80.00, 'Цветок', '8 марта', 200),
-('Ромашка', 'Белый', 50.00, 'Цветок', 'День рождения', 150);
+('Ромашка', 'Белый', 50.00, 'Цветок', 'День рождения', 150),
+('Орхидея', 'Фиолетовый', 300.00, 'Цветок', 'Юбилей', 50),
+('Лилия', 'Белый', 120.00, 'Цветок', 'Свадьба', 80);
 
 INSERT INTO clients (full_name, phone, email) VALUES
 ('Иванов Иван Иванович', '+79161234567', 'ivanov@mail.ru'),
 ('Петрова Мария Сергеевна', '+79031234567', 'petrova@mail.ru'),
 ('Сидоров Алексей Петрович', '+79261234567', 'sidorov@mail.ru');
+
+INSERT INTO orders (client_id, status, total_price, payment_method) VALUES
+(1, 'Готов', 300.00, 'карта'),
+(2, 'В сборке', 150.00, 'наличные');
